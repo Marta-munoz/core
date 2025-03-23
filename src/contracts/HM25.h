@@ -1,66 +1,82 @@
 using namespace QPI;
 
-struct HM252
-{
-};
-
-struct HM25 : public ContractBase
+struct MilestoneContract : public ContractBase
 {
 public:
-    struct Echo_input{};
-    struct Echo_output{};
+    struct RegisterUser_input {
+        qstring user;
+    };
+    struct RegisterUser_output {};
 
-    struct Burn_input{};
-    struct Burn_output{};
+    struct AddMilestone_input {
+        qstring user;
+        uint64 reward;
+    };
+    struct AddMilestone_output {};
 
-    struct GetStats_input {};
-    struct GetStats_output
-    {
-        uint64 numberOfEchoCalls;
-        uint64 numberOfBurnCalls;
+    struct ClaimReward_input {
+        qstring user;
+    };
+    struct ClaimReward_output {
+        uint64 amountPaid;
+    };
+
+    struct GetUserRewards_input {
+        qstring user;
+    };
+    struct GetUserRewards_output {
+        uint64 pendingReward;
     };
 
 private:
-    uint64 numberOfEchoCalls;
-    uint64 numberOfBurnCalls;
+    std::map<qstring, uint64> userRewards;
 
     /**
-    Send back the invocation amount
+    * Register a user in the system
     */
-    PUBLIC_PROCEDURE(Echo)
-        state.numberOfEchoCalls++;
-        if (qpi.invocationReward() > 0)
+    PUBLIC_PROCEDURE(RegisterUser)
+        userRewards[input.user] = 0;
+    _
+
+    /**
+    * Add a milestone reward for a user
+    */
+    PUBLIC_PROCEDURE(AddMilestone)
+        userRewards[input.user] += input.reward;
+    _
+
+    /**
+    * Allow user to claim their reward
+    */
+    PUBLIC_PROCEDURE(ClaimReward)
+        uint64 reward = userRewards[input.user];
+        if (reward > 0)
         {
-            qpi.transfer(qpi.invocator(), qpi.invocationReward());
+            userRewards[input.user] = 0;
+            qpi.transfer(input.user, reward);
+            output.amountPaid = reward;
+        }
+        else
+        {
+            output.amountPaid = 0;
         }
     _
 
     /**
-    * Burn all invocation amount
+    * Get user's pending rewards
     */
-    PUBLIC_PROCEDURE(Burn)
-        state.numberOfBurnCalls++;
-        if (qpi.invocationReward() > 0)
-        {
-            qpi.burn(qpi.invocationReward());
-        }
-    _
-
-    PUBLIC_FUNCTION(GetStats)
-        output.numberOfBurnCalls = state.numberOfBurnCalls;
-        output.numberOfEchoCalls = state.numberOfEchoCalls;
+    PUBLIC_FUNCTION(GetUserRewards)
+        output.pendingReward = userRewards[input.user];
     _
 
     REGISTER_USER_FUNCTIONS_AND_PROCEDURES
-
-        REGISTER_USER_PROCEDURE(Echo, 1);
-        REGISTER_USER_PROCEDURE(Burn, 2);
-
-        REGISTER_USER_FUNCTION(GetStats, 1);
+        REGISTER_USER_PROCEDURE(RegisterUser, 1);
+        REGISTER_USER_PROCEDURE(AddMilestone, 2);
+        REGISTER_USER_PROCEDURE(ClaimReward, 3);
+        REGISTER_USER_FUNCTION(GetUserRewards, 1);
     _
 
     INITIALIZE
-        state.numberOfEchoCalls = 0;
-        state.numberOfBurnCalls = 0;
+        userRewards.clear();
     _
 };
